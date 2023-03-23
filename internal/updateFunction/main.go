@@ -6,16 +6,19 @@ import (
 
 	"github.com/cloudevents/sdk-go/v2/event"
 	"github.com/sirupsen/logrus"
+	firestore "pantheon.io/edrt-policy-docs-functions/internal/store"
 	"pantheon.io/edrt-policy-docs-functions/internal/types"
 )
 
 type UpdateHandler struct {
 	logger *logrus.Logger
+	store  *firestore.Firestore
 }
 
-func NewUpdateHandler(logger *logrus.Logger) UpdateHandler {
+func NewUpdateHandler(logger *logrus.Logger, fs *firestore.Firestore) UpdateHandler {
 	return UpdateHandler{
 		logger: logger,
+		store:  fs,
 	}
 }
 
@@ -42,5 +45,8 @@ func (u *UpdateHandler) PolicyDocUpdated(ctx context.Context, e event.Event) err
 		logger.WithField(x, msg.Message.Attributes[x]).Info("Attribute")
 	}
 	logger.Info("Iteration complete")
+
+	result := u.store.Read(ctx)
+	logger.WithField("Data", result).Info("Data from firestore")
 	return nil
 }

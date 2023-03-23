@@ -22,14 +22,14 @@ func New(logger *logrus.Logger, projectId string) Firestore {
 func (f *Firestore) Read(ctx context.Context) interface{} {
 	client, err := firestore.NewClient(ctx, f.projectId)
 	if err != nil {
-		f.logger.Fatal(err)
+		f.logger.Fatalf("Unable to create firestore client %s", err)
 	}
 
 	collection := client.Collection("foo")
 	doc := collection.Doc("bar")
 	data, err := doc.Get(ctx)
 	if err != nil {
-		f.logger.Fatal(err)
+		f.logger.Fatalf("Unable to get document %s", err)
 	}
 
 	theData := data.Data()["baz"]
