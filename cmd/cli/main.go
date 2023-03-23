@@ -32,4 +32,38 @@ func main() {
 	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
 	result := f.Read(context.Background())
 	fmt.Println(result)
+
+	GetHostnameDoc(logger)
+	GetHostnameMetadataDoc(logger)
+	GetEdgeLogicDoc(logger)
+}
+
+func GetHostnameDoc(logger *logrus.Logger) {
+	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
+	result, err := f.ReadHostname(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
+	if err != nil {
+		logger.Fatalf("Error: %s", err)
+	}
+
+	fmt.Println(result)
+}
+
+func GetHostnameMetadataDoc(logger *logrus.Logger) {
+	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
+	result, err := f.ReadHostnameMetadata(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
+	if err != nil {
+		logger.Fatalf("Error: %s", err)
+	}
+
+	fmt.Println(result)
+}
+
+func GetEdgeLogicDoc(logger *logrus.Logger) {
+	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
+	result, err := f.ReadEdgeLogic(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
+	if err != nil {
+		logger.Fatalf("Error: %s", err)
+	}
+
+	fmt.Println(result)
 }
