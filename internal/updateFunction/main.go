@@ -22,8 +22,8 @@ func NewUpdateHandler(logger *logrus.Logger) UpdateHandler {
 func (u *UpdateHandler) PolicyDocUpdated(ctx context.Context, e event.Event) error {
 	/**
 	* This function is intended to be the pub/sub interface. It will do as little as
-	* possible. It will call into other packages to read from firebase, denormalize
-	* the data, then write to firebase.
+	* possible. It will call into other packages to read from firestore, denormalize
+	* the data, then write to firestore
 	**/
 
 	logger := u.logger.WithField("Function", "PolicyDocUpdated")
