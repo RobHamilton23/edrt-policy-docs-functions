@@ -1,0 +1,65 @@
+---
+kind: service-config.push-trolley.svc.pantheon.io
+version: 0.0.2
+spec:
+  name: edrt-policy-docs-update
+  owner: edrt@pantheon.io
+
+  # Contexts is a list of all the contexts that your service runs in.
+  # You can push to them using 'push-trolley push -c $NAME'
+  # You can configure as many contexts as you'd like so long as the names are unique.
+
+  contexts:
+    # https://github.com/pantheon-systems/push-trolley/blob/main/docs/features/Contexts.md
+    - name: sandbox-rhamilton
+
+
+      # The static_info settings let you specify the gcp_project, cc_namespace, and whether your project is development or not.
+      # In the future, these settings will be moved to context-provisioning.
+      static_info:
+        # The GCP project for this context. This is required.
+        gcp_project: rhamilton-001
+
+        # Is this context a development or production context?
+        # This influences the safety checks we perform when we push this service into this context.
+        # dev=false (the default) means we perform pushes as safely as possible to this context (which may be slow).
+        # dev=true means we sometimes skip safety checks (which may be faster). The extra speed might be desirable in
+        # development environments.
+        dev: yes
+
+      # Which GCP region should we deploy the service's regional resources in.
+      # This is required for now, but managing multi-regional services is planned and that will supercede this field.
+      region: us-central1
+
+
+  # List of GCP Cloud Functions which form this service
+  # The collection of cloud functions for a service are pushed together as part of each push phase
+  # configured for the context being pushed.
+  cloud_functions:
+    - name: edrt-policy-docs-update
+
+      # Sets the this to change the entrypoint name for the Cloud Function.
+      # This needs to match the entrypoint name that your service registers on startup.
+      # Defaults to 'Entrypoint' if not provided.
+      entrypoint: PolicyDocUpdated
+
+      # Sets the CloudFunction generation (either '1' or '2')
+      # NOTE: this must be a string, so keep it quoted!
+      generation: "1"
+
+      # Sets the CloudFunction runtime
+      # This corresponds with the '--runtime' option of 'gcloud beta functions deploy':
+      # https://cloud.google.com/sdk/gcloud/reference/beta/functions/deploy
+      runtime: go119
+
+      # Set the source directory for the CloudFunction.
+      # This is relative to your git repository's root directory.
+      source_dir: .
+
+      # Sets properties of the trigger for this CloudFunction. See:
+      # https://cloud.google.com/functions/docs/calling
+      trigger:
+        type: pubsub
+        topic: demo-topic-001
+
+
