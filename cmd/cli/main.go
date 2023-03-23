@@ -2,68 +2,91 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 
 	_ "embed"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"pantheon.io/edrt-policy-docs-functions/config"
 	firestore "pantheon.io/edrt-policy-docs-functions/internal/store"
 )
 
+var firestoreProject string
+
 func init() {
 	configMap := config.GetConfig()
 	viper.MergeConfigMap(configMap)
-	fmt.Println(viper.GetString("FIRESTORE_PROJECT"))
+	firestoreProject = viper.GetString("FIRESTORE_PROJECT")
 }
 
 func main() {
 	logger := logrus.New()
-	filepath.Walk(".", func(path string, info fs.FileInfo, err error) error {
-		logger.Info(path)
-		return nil
-	})
+	getHostnameCommand := &cobra.Command{
+		Use:   "get-hostname site_id env hostname",
+		Short: "Fetches a hostname from the normalized collection",
+		Long:  "Fetches a hostname from the normalized collection",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			f := firestore.New(logger, firestoreProject)
+			siteId := args[0]
+			env := args[1]
+			hostname := args[2]
+			result, err := f.ReadHostname(context.Background(), siteId, env, hostname)
+			if err != nil {
+				logger.Fatalf("unable to fetch hostname %s", err)
+			}
 
-	fmt.Println("This will be a CLI allowing interactive testing of logic in this repo during development.")
-	fmt.Println("Will probably use a library like cobra to set up the CLI.")
-	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
-	result := f.Read(context.Background())
-	fmt.Println(result)
-
-	GetHostnameDoc(logger)
-	GetHostnameMetadataDoc(logger)
-	GetEdgeLogicDoc(logger)
-}
-
-func GetHostnameDoc(logger *logrus.Logger) {
-	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
-	result, err := f.ReadHostname(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
+			hostnameJson, _ := json.Marshal(result)
+			fmt.Println(string(hostnameJson))
+		},
 	}
 
-	fmt.Println(result)
-}
+	getHostnameMetadataCommand := &cobra.Command{
+		Use:   "get-hostname-metadata site_id env hostname",
+		Short: "Fetches hostname metadata from the normalized collection",
+		Long:  "Fetches hostname metadata from the normalized collection",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			f := firestore.New(logger, firestoreProject)
+			siteId := args[0]
+			env := args[1]
+			hostname := args[2]
+			result, err := f.ReadHostnameMetadata(context.Background(), siteId, env, hostname)
+			if err != nil {
+				logger.Fatalf("unable to fetch hostname %s", err)
+			}
 
-func GetHostnameMetadataDoc(logger *logrus.Logger) {
-	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
-	result, err := f.ReadHostnameMetadata(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
+			hostnameMetadataJson, _ := json.Marshal(result)
+			fmt.Println(string(hostnameMetadataJson))
+		},
 	}
 
-	fmt.Println(result)
-}
+	getEdgeLogicCommand := &cobra.Command{
+		Use:   "get-edge-logic site_id env hostname",
+		Short: "Fetches edge logic from the normalized collection",
+		Long:  "Fetches edge logic from the normalized collection",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			f := firestore.New(logger, firestoreProject)
+			siteId := args[0]
+			env := args[1]
+			hostname := args[2]
+			result, err := f.ReadEdgeLogic(context.Background(), siteId, env, hostname)
+			if err != nil {
+				logger.Fatalf("unable to fetch hostname %s", err)
+			}
 
-func GetEdgeLogicDoc(logger *logrus.Logger) {
-	f := firestore.New(logger, viper.GetString("FIRESTORE_PROJECT"))
-	result, err := f.ReadEdgeLogic(context.Background(), "757fecb0-5df7-4d39-bc97-ccc5c6d5675e", "dev", "monoraillime.com")
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
+			edgeLogicJson, _ := json.Marshal(result)
+			fmt.Println(string(edgeLogicJson))
+		},
 	}
 
-	fmt.Println(result)
+	var rootCmd = &cobra.Command{Use: "app"}
+	rootCmd.AddCommand(getHostnameCommand)
+	rootCmd.AddCommand(getHostnameMetadataCommand)
+	rootCmd.AddCommand(getEdgeLogicCommand)
+	rootCmd.Execute()
 }
