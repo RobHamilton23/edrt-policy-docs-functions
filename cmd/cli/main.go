@@ -36,7 +36,7 @@ func main() {
 		Long:  "Fetches a hostname from the normalized collection",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
-			f := firestore.New(logger, firestoreProject)
+			f := getFirestore(firestoreProject)
 			siteId := args[0]
 			env := args[1]
 			hostname := args[2]
@@ -56,7 +56,7 @@ func main() {
 		Long:  "Fetches hostname metadata from the normalized collection",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
-			f := firestore.New(logger, firestoreProject)
+			f := getFirestore(firestoreProject)
 			siteId := args[0]
 			env := args[1]
 			hostname := args[2]
@@ -76,7 +76,7 @@ func main() {
 		Long:  "Fetches edge logic from the normalized collection",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
-			f := firestore.New(logger, firestoreProject)
+			f := getFirestore(firestoreProject)
 			siteId := args[0]
 			env := args[1]
 			hostname := args[2]
@@ -95,4 +95,12 @@ func main() {
 	rootCmd.AddCommand(getHostnameMetadataCommand)
 	rootCmd.AddCommand(getEdgeLogicCommand)
 	rootCmd.Execute()
+}
+
+func getFirestore(firestoreProject string) *firestore.Firestore {
+	f, err := firestore.New(context.Background(), logger, firestoreProject)
+	if err != nil {
+		logger.Fatalf("Unable to create firestore instance: %w", err)
+	}
+	return f
 }

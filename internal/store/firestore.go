@@ -16,24 +16,26 @@ const hostnameMetadataCollectionName = "hostnameMetadata"
 const edgeLogicCollectionName = "edgelogic"
 
 type Firestore struct {
-	logger    *logrus.Logger
-	projectId string
+	logger          *logrus.Logger
+	projectId       string
+	firestoreClient *firestore.Client
 }
 
-func New(logger *logrus.Logger, projectId string) Firestore {
-	return Firestore{
-		logger:    logger,
-		projectId: projectId,
+func New(ctx context.Context, logger *logrus.Logger, projectId string) (*Firestore, error) {
+	client, err := firestore.NewClient(ctx, projectId)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create firestore client: %w", err)
 	}
+
+	return &Firestore{
+		logger:          logger,
+		projectId:       projectId,
+		firestoreClient: client,
+	}, nil
 }
 
 func (f *Firestore) Read(ctx context.Context) interface{} {
-	client, err := firestore.NewClient(ctx, f.projectId)
-	if err != nil {
-		f.logger.Fatalf("Unable to create firestore client %s", err)
-	}
-
-	collection := client.Collection("foo")
+	collection := f.firestoreClient.Collection("foo")
 	doc := collection.Doc("bar")
 	data, err := doc.Get(ctx)
 	if err != nil {
@@ -144,11 +146,6 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 }
 
 func (f *Firestore) getCollection(ctx context.Context, collectionName string, logger *logrus.Entry) (*firestore.CollectionRef, error) {
-	client, err := firestore.NewClient(ctx, f.projectId)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create firestore client %w", err)
-	}
-
-	collection := client.Collection(collectionName)
+	collection := f.firestoreClient.Collection(collectionName)
 	return collection, nil
 }

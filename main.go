@@ -1,6 +1,7 @@
 package policyDocsUpdate
 
 import (
+	"context"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
@@ -22,8 +23,19 @@ func init() {
 	logger = logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 
-	fs := firestore.New(logger, viper.GetString("firestore-project"))
+	fs, err := firestore.New(
+		context.Background(),
+		logger,
+		viper.GetString("firestore-project"),
+	)
 
-	updateHandler := update.NewUpdateHandler(logger, &fs)
+	if err != nil {
+		// Yes, we want the process to die here. If we can't create the
+		// firstore client, this cloud function cannot run and should
+		// restart.
+		logger.Fatalf("Unable to create firestore client: %w", err)
+	}
+
+	updateHandler := update.NewUpdateHandler(logger, fs)
 	functions.CloudEvent("PolicyDocUpdated", updateHandler.PolicyDocUpdated)
 }
