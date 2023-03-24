@@ -6,6 +6,8 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"pantheon.io/edrt-policy-docs-functions/internal/types"
 )
 
@@ -119,15 +121,24 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 	hostname string) (*firestore.DocumentSnapshot, error) {
 	siteDocRef := rootCollection.Doc(siteId)
 	siteDoc, err := siteDocRef.Get(ctx)
+
 	if err != nil {
-		return nil, fmt.Errorf("unable to load site document for %s: %s", siteId, err)
+		if status.Code(err) == codes.NotFound {
+			return nil, fmt.Errorf("document not found for site %s %w", siteId, err)
+		}
+
+		return nil, fmt.Errorf("unable to load site document for %s: %w", siteId, err)
 	}
 
 	envCollection := siteDoc.Ref.Collection(env)
 	hostnameDoc := envCollection.Doc(hostname)
 	hostnameDocument, err := hostnameDoc.Get(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load hostname document for %s: %s", hostname, err)
+		if status.Code(err) == codes.NotFound {
+			return nil, fmt.Errorf("document not found for hostname %s", hostname)
+		}
+
+		return nil, fmt.Errorf("unable to load hostname document for %s: %w", hostname, err)
 	}
 	return hostnameDocument, nil
 }
@@ -135,7 +146,7 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 func (f *Firestore) getCollection(ctx context.Context, collectionName string, logger *logrus.Entry) (*firestore.CollectionRef, error) {
 	client, err := firestore.NewClient(ctx, f.projectId)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create firestore client %s", err)
+		return nil, fmt.Errorf("unable to create firestore client %w", err)
 	}
 
 	collection := client.Collection(collectionName)
