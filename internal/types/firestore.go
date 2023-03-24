@@ -9,7 +9,6 @@ type Hostname struct {
 type EdgeLogic struct {
 	RedirectTo   string    `firestore:"redirect_to" json:"redirect_to"`
 	EnforceHTTPS string    `firestore:"enforce_https" json:"enforce_https"`
-	CacheControl string    `firestore:"cache_control" json:"cache_control"`
 	Created      time.Time `firestore:"created" json:"created"`
 	Updated      time.Time `firestore:"updated" json:"updated"`
 	Backend      string    `firestore:"backend" json:"backend"`

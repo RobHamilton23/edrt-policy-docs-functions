@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 
 	_ "embed"
 
@@ -14,16 +16,20 @@ import (
 	firestore "pantheon.io/edrt-policy-docs-functions/internal/store"
 )
 
-var firestoreProject string
+var logger *logrus.Logger
 
 func init() {
-	configMap := config.GetConfig()
-	viper.MergeConfigMap(configMap)
-	firestoreProject = viper.GetString("FIRESTORE_PROJECT")
+	logger = logrus.New()
+	logger.Formatter = &logrus.JSONFormatter{}
+	log.SetOutput(logger.Writer())
+
+	viper.MergeConfigMap(config.GetConfig())
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
 }
 
 func main() {
-	logger := logrus.New()
+	firestoreProject := viper.GetString("firestore-project")
 	getHostnameCommand := &cobra.Command{
 		Use:   "get-hostname site_id env hostname",
 		Short: "Fetches a hostname from the normalized collection",
