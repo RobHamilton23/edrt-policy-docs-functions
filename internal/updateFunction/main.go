@@ -64,7 +64,16 @@ func (u *UpdateHandler) PolicyDocUpdated(ctx context.Context, e event.Event) err
 	}
 	logger.Info("Iteration complete")
 
-	result := u.store.Read(ctx)
+	result, err := u.store.ReadHostnameMetadata(
+		ctx,
+		pdocsMessage.Site,
+		pdocsMessage.Environment,
+		pdocsMessage.Hostname,
+	)
+	if err != nil {
+		logger.Errorf("unable to fetch hostname metadata: %w", err)
+		return nil
+	}
 	logger.WithField("Data", result).Info("Data from firestore")
 	return nil
 }

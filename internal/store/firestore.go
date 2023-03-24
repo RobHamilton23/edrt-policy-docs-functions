@@ -34,25 +34,6 @@ func New(ctx context.Context, logger *logrus.Logger, projectId string) (*Firesto
 	}, nil
 }
 
-func (f *Firestore) Read(ctx context.Context) interface{} {
-	collection := f.firestoreClient.Collection("foo")
-	doc := collection.Doc("bar")
-	data, err := doc.Get(ctx)
-	if err != nil {
-		f.logger.Fatalf("Unable to get document %s", err)
-	}
-
-	theData := data.Data()["baz"]
-	switch stringData := theData.(type) {
-	case string:
-		return stringData
-	default:
-		f.logger.Fatal("Unable to read data")
-	}
-
-	return nil
-}
-
 func (f *Firestore) ReadHostname(ctx context.Context, siteId string, env string, hostname string) (*types.Hostname, error) {
 	logger := f.logger.WithField("method", "ReadHostname")
 	collection, err := f.getCollection(ctx, hostnameCollectionName, logger)
