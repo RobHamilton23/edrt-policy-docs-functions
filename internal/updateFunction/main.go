@@ -2,7 +2,7 @@ package update
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 
 	"github.com/cloudevents/sdk-go/v2/event"
 	"github.com/sirupsen/logrus"
@@ -34,10 +34,28 @@ func (u *UpdateHandler) PolicyDocUpdated(ctx context.Context, e event.Event) err
 	var msg types.MessagePublishedData
 
 	if err := e.DataAs(&msg); err != nil {
-		return fmt.Errorf("event.DataAs: %v", err)
+		logger.Errorf("event.DataAs: %w", err)
+
+		// Bad messages should not trigger the cloud function to retry
+		return nil
 	}
 
 	msgText := string(msg.Message.Data)
+
+	var pdocsMessage types.PolicyDocsMessage
+	err := json.Unmarshal([]byte(msgText), &pdocsMessage)
+	if err != nil {
+		logger.Errorf(
+			"unable to parse pubsub message (%s) as PolicyDocsMessage: %w",
+			msgText,
+			err,
+		)
+
+		// When the message fails to deserialize, we don't want the funciton to
+		// repeatedly retry, so we'll just exit as if everything's fine and the
+		// bad message will be ignored.
+		return nil
+	}
 
 	logger.WithField("PubSub", true).WithField("Data", msgText).Info("Pubsub triggered")
 	logger.Info("Iterating over attributes")

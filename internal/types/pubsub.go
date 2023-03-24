@@ -8,3 +8,9 @@ type PubSubMessage struct {
 type MessagePublishedData struct {
 	Message PubSubMessage
 }
+
+type PolicyDocsMessage struct {
+	Site        string `json:"site"`
+	Environment string `json:"env"`
+	Hostname    string `json:"hostname"`
+}

@@ -31,7 +31,7 @@ func init() {
 
 	if err != nil {
 		// Yes, we want the process to die here. If we can't create the
-		// firstore client, this cloud function cannot run and should
+		// firestore client, this cloud function cannot run and should
 		// restart.
 		logger.Fatalf("Unable to create firestore client: %w", err)
 	}
