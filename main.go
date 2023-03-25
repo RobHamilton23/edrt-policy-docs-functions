@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 	"pantheon.io/edrt-policy-docs-functions/config"
 	firestore "pantheon.io/edrt-policy-docs-functions/internal/store"
-	update "pantheon.io/edrt-policy-docs-functions/internal/updateFunction"
+	updateFunction "pantheon.io/edrt-policy-docs-functions/internal/updateFunction"
 )
 
 var logger *logrus.Logger
@@ -36,6 +36,6 @@ func init() {
 		logger.Fatalf("Unable to create firestore client: %w", err)
 	}
 
-	updateHandler := update.NewUpdateHandler(logger, fs)
+	updateHandler := updateFunction.NewUpdateHandler(logger, fs)
 	functions.CloudEvent("PolicyDocUpdated", updateHandler.PolicyDocUpdated)
 }

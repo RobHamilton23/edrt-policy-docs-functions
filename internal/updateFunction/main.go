@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudevents/sdk-go/v2/event"
 	"github.com/sirupsen/logrus"
+	"pantheon.io/edrt-policy-docs-functions/internal/service"
 	firestore "pantheon.io/edrt-policy-docs-functions/internal/store"
 	"pantheon.io/edrt-policy-docs-functions/internal/types"
 )
@@ -51,29 +52,37 @@ func (u *UpdateHandler) PolicyDocUpdated(ctx context.Context, e event.Event) err
 			err,
 		)
 
-		// When the message fails to deserialize, we don't want the funciton to
+		// When the message fails to deserialize, we don't want the function to
 		// repeatedly retry, so we'll just exit as if everything's fine and the
 		// bad message will be ignored.
 		return nil
 	}
 
 	logger.WithField("PubSub", true).WithField("Data", msgText).Info("Pubsub triggered")
-	logger.Info("Iterating over attributes")
-	for x := range msg.Message.Attributes {
-		logger.WithField(x, msg.Message.Attributes[x]).Info("Attribute")
-	}
-	logger.Info("Iteration complete")
 
-	result, err := u.store.ReadHostnameMetadata(
+	dt := service.NewDocumentTransformation(
+		u.store,
+		u.logger,
+	)
+	err = dt.Denormalize(
 		ctx,
 		pdocsMessage.Site,
 		pdocsMessage.Environment,
 		pdocsMessage.Hostname,
 	)
 	if err != nil {
-		logger.Errorf("unable to fetch hostname metadata: %w", err)
-		return nil
+		logger.WithField(
+			"pubsub_message",
+			msgText,
+		).WithError(
+			err,
+		).Error(
+			"Unable to denormalize policy doc",
+		)
+
 	}
-	logger.WithField("Data", result).Info("Data from firestore")
+
+	logger.WithField("hostname", pdocsMessage.Hostname).Info("policy doc successfully denormalized")
+
 	return nil
 }
