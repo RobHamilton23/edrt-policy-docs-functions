@@ -34,14 +34,88 @@ func New(ctx context.Context, logger *logrus.Logger, projectId string) (*Firesto
 	}, nil
 }
 
-func (f *Firestore) ReadHostname(ctx context.Context, siteId string, env string, hostname string) (*types.Hostname, error) {
-	logger := f.logger.WithField("method", "ReadHostname")
-	collection, err := f.getCollection(ctx, hostnameCollectionName, logger)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get collection %s: %s", hostnameCollectionName, err)
-	}
+func (f *Firestore) GetNormalizedDocs(
+	ctx context.Context,
+	siteId string,
+	environment string,
+	hostname string,
+) (h *types.Hostname, m *types.HostnameMetadata, el *types.EdgeLogic, err error) {
+	err = f.firestoreClient.RunTransaction(
+		ctx,
+		func(ctx context.Context, t *firestore.Transaction) error {
+			h, err = f.ReadHostname(
+				ctx,
+				t,
+				siteId,
+				environment,
+				hostname,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to fetch hostname in transaction: %w: ", err)
+			}
 
-	hostnameDoc, err := f.getHostnameDocumentBySiteEnv(ctx, collection, siteId, env, hostname)
+			m, err = f.ReadHostnameMetadata(
+				ctx,
+				t,
+				siteId,
+				environment,
+				hostname,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to fetch hostname metadata in transaction: %w", err)
+			}
+
+			el, err = f.ReadEdgeLogic(
+				ctx,
+				t,
+				siteId,
+				environment,
+				hostname,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to fetch edge logic in transaction: %w", err)
+			}
+
+			return nil
+		},
+	)
+
+	return
+}
+
+func (f *Firestore) WriteDenormalizedDocs(
+	ctx context.Context,
+	denormalizedDoc *types.Denormalized,
+) error {
+	logger := f.logger.WithField("method", "WriteDenormalizedDocs")
+	return f.firestoreClient.RunTransaction(
+		ctx,
+		func(ctx context.Context, t *firestore.Transaction) error {
+			collectionPath := fmt.Sprintf("denormed/policydoc/%s", denormalizedDoc.Hostname)
+			collection := f.getCollection(ctx, collectionPath, logger)
+			docRef := collection.Doc("policydoc")
+			result, err := docRef.Set(ctx, denormalizedDoc)
+			if err != nil {
+				return fmt.Errorf("unable to write denormed policydoc: %w", err)
+			}
+			logger.WithField("result", result).Info("Write Result")
+
+			return nil
+		},
+	)
+}
+
+func (f *Firestore) ReadHostname(
+	ctx context.Context,
+	t *firestore.Transaction,
+	siteId string,
+	env string,
+	hostname string,
+) (*types.Hostname, error) {
+	logger := f.logger.WithField("method", "ReadHostname")
+	collection := f.getCollection(ctx, hostnameCollectionName, logger)
+
+	hostnameDoc, err := f.getHostnameDocumentBySiteEnv(t, collection, siteId, env, hostname)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch hostname document for %s: %s", hostname, err)
 	}
@@ -51,15 +125,18 @@ func (f *Firestore) ReadHostname(ctx context.Context, siteId string, env string,
 	return h, nil
 }
 
-func (f *Firestore) ReadHostnameMetadata(ctx context.Context, siteId string, env string, hostname string) (*types.HostnameMetadata, error) {
+func (f *Firestore) ReadHostnameMetadata(
+	ctx context.Context,
+	t *firestore.Transaction,
+	siteId string,
+	env string,
+	hostname string,
+) (*types.HostnameMetadata, error) {
 	logger := f.logger.WithField("method", "ReadHostnameMetadata")
 
-	collection, err := f.getCollection(ctx, hostnameMetadataCollectionName, logger)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get collection %s: %s", hostnameMetadataCollectionName, err)
-	}
+	collection := f.getCollection(ctx, hostnameMetadataCollectionName, logger)
 	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
-		ctx,
+		t,
 		collection,
 		siteId,
 		env,
@@ -72,16 +149,19 @@ func (f *Firestore) ReadHostnameMetadata(ctx context.Context, siteId string, env
 	return h, nil
 }
 
-func (f *Firestore) ReadEdgeLogic(ctx context.Context, siteId string, env string, hostname string) (*types.EdgeLogic, error) {
+func (f *Firestore) ReadEdgeLogic(
+	ctx context.Context,
+	t *firestore.Transaction,
+	siteId string,
+	env string,
+	hostname string,
+) (*types.EdgeLogic, error) {
 	logger := f.logger.WithField("method", "ReadEdgeLogic")
 
-	collection, err := f.getCollection(ctx, edgeLogicCollectionName, logger)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get collection %s: %s", edgeLogicCollectionName, err)
-	}
+	collection := f.getCollection(ctx, edgeLogicCollectionName, logger)
 
 	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
-		ctx,
+		t,
 		collection,
 		siteId,
 		env,
@@ -97,13 +177,13 @@ func (f *Firestore) ReadEdgeLogic(ctx context.Context, siteId string, env string
 }
 
 func (*Firestore) getHostnameDocumentBySiteEnv(
-	ctx context.Context,
+	t *firestore.Transaction,
 	rootCollection *firestore.CollectionRef,
 	siteId string,
 	env string,
 	hostname string) (*firestore.DocumentSnapshot, error) {
 	siteDocRef := rootCollection.Doc(siteId)
-	siteDoc, err := siteDocRef.Get(ctx)
+	siteDoc, err := t.Get(siteDocRef)
 
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -115,7 +195,7 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 
 	envCollection := siteDoc.Ref.Collection(env)
 	hostnameDoc := envCollection.Doc(hostname)
-	hostnameDocument, err := hostnameDoc.Get(ctx)
+	hostnameDocument, err := t.Get(hostnameDoc)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil, fmt.Errorf("document not found for hostname %s", hostname)
@@ -126,7 +206,11 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 	return hostnameDocument, nil
 }
 
-func (f *Firestore) getCollection(ctx context.Context, collectionName string, logger *logrus.Entry) (*firestore.CollectionRef, error) {
+func (f *Firestore) getCollection(
+	ctx context.Context,
+	collectionName string,
+	logger *logrus.Entry,
+) *firestore.CollectionRef {
 	collection := f.firestoreClient.Collection(collectionName)
-	return collection, nil
+	return collection
 }
