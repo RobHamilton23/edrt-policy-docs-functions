@@ -9,11 +9,14 @@ import (
 	"pantheon.io/edrt-policy-docs-functions/internal/types"
 )
 
+// DocumentTransformation provides functionality for transforming policy docs
 type DocumentTransformation struct {
 	firestore *firestore.Firestore
 	logger    *logrus.Logger
 }
 
+// NewDocumentTransformation initializes an instance of hte DocumentTransformation type
+// with the provided firestore and logger instances.
 func NewDocumentTransformation(firestore *firestore.Firestore, logger *logrus.Logger) DocumentTransformation {
 	return DocumentTransformation{
 		firestore: firestore,
@@ -21,6 +24,8 @@ func NewDocumentTransformation(firestore *firestore.Firestore, logger *logrus.Lo
 	}
 }
 
+// Denormalize loads the normalized policy doc for the given site, environment, and hostname,
+// denormalizes the data, and writes it to firestore.
 func (d *DocumentTransformation) Denormalize(
 	ctx context.Context,
 	siteId string,
@@ -28,19 +33,34 @@ func (d *DocumentTransformation) Denormalize(
 	hostname string,
 ) error {
 	// Read normalized document from firestore
-	h, hm, el, err := d.firestore.GetNormalizedDocs(
+	_, hm, el, err := d.firestore.GetNormalizedDocs(
 		ctx,
 		siteId,
 		environment,
 		hostname,
 	)
-
-	fmt.Println(h)
-	fmt.Println(hm)
-	fmt.Println(el)
-	fmt.Println(err)
+	if err != nil {
+		return fmt.Errorf("unable to load normalized policy docs: %w", err)
+	}
 
 	// Denormalize
+	denormed := populateDenormalizedDocument(hm, el)
+
+	// Write denormalized documents to firestore
+	paths := []string{
+		fmt.Sprintf("denormed/policydoc/%s/policydoc", denormed.Hostname),
+	}
+	err = d.firestore.WriteDenormalizedDocs(ctx, paths, denormed)
+	if err != nil {
+		return fmt.Errorf("unable to write denormalized docs: %w", err)
+	}
+
+	return nil
+}
+
+// populateDenormalizedDocument creates a Denormalized instance and populates it
+// with the provided policy doc data.
+func populateDenormalizedDocument(hm *types.HostnameMetadata, el *types.EdgeLogic) *types.Denormalized {
 	denormed := &types.Denormalized{}
 	denormed.Hostname = hm.Hostname
 	denormed.Zone = hm.Zone
@@ -51,15 +71,5 @@ func (d *DocumentTransformation) Denormalize(
 	denormed.Jurisdiction = el.Jurisdiction
 	denormed.SiteId = hm.SiteId
 	denormed.SiteEnv = hm.SiteEnv
-
-	// Write denormalizes documents to firestore
-	paths := []string{
-		fmt.Sprintf("denormed/policydoc/%s/policydoc", denormed.Hostname),
-	}
-	err = d.firestore.WriteDenormalizedDocs(ctx, paths, denormed)
-	if err != nil {
-		return fmt.Errorf("unable to write denormalized docs: %w", err)
-	}
-
-	return nil
+	return denormed
 }
