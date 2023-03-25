@@ -3,6 +3,7 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"cloud.google.com/go/firestore"
 	"github.com/sirupsen/logrus"
@@ -85,20 +86,33 @@ func (f *Firestore) GetNormalizedDocs(
 
 func (f *Firestore) WriteDenormalizedDocs(
 	ctx context.Context,
+	paths []string,
 	denormalizedDoc *types.Denormalized,
 ) error {
 	logger := f.logger.WithField("method", "WriteDenormalizedDocs")
 	return f.firestoreClient.RunTransaction(
 		ctx,
 		func(ctx context.Context, t *firestore.Transaction) error {
-			collectionPath := fmt.Sprintf("denormed/policydoc/%s", denormalizedDoc.Hostname)
-			collection := f.getCollection(ctx, collectionPath, logger)
-			docRef := collection.Doc("policydoc")
-			result, err := docRef.Set(ctx, denormalizedDoc)
-			if err != nil {
-				return fmt.Errorf("unable to write denormed policydoc: %w", err)
+			for _, path := range paths {
+				if path[0] == '/' {
+					path = strings.TrimLeft(path, "/")
+				}
+				err := assertValidFirestoreDocPath(path)
+				if err != nil {
+					return err
+				}
+
+				lastPathSeparatorIndex := strings.LastIndex(path, "/")
+				collectionPath := path[0:lastPathSeparatorIndex]
+				docName := path[lastPathSeparatorIndex+1:]
+				collection := f.getCollection(ctx, collectionPath, logger)
+				docRef := collection.Doc(docName)
+				err = t.Set(docRef, denormalizedDoc)
+				if err != nil {
+					return fmt.Errorf("unable to write denormed policydoc to %s: %w", path, err)
+				}
+				logger.WithField("path", path).Info("Write Complete")
 			}
-			logger.WithField("result", result).Info("Write Result")
 
 			return nil
 		},
@@ -213,4 +227,13 @@ func (f *Firestore) getCollection(
 ) *firestore.CollectionRef {
 	collection := f.firestoreClient.Collection(collectionName)
 	return collection
+}
+
+func assertValidFirestoreDocPath(path string) error {
+	splitPath := strings.Split(path, "/")
+	if len(splitPath)%2 != 0 {
+		return fmt.Errorf("path should have an even number of components: %s", path)
+	}
+
+	return nil
 }

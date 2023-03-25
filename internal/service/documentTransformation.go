@@ -53,7 +53,10 @@ func (d *DocumentTransformation) Denormalize(
 	denormed.SiteEnv = hm.SiteEnv
 
 	// Write denormalizes documents to firestore
-	err = d.firestore.WriteDenormalizedDocs(ctx, denormed)
+	paths := []string{
+		fmt.Sprintf("denormed/policydoc/%s", denormed.Hostname),
+	}
+	err = d.firestore.WriteDenormalizedDocs(ctx, paths, denormed)
 	if err != nil {
 		return fmt.Errorf("unable to write denormalized docs: %w", err)
 	}
