@@ -44,8 +44,7 @@ func (f *Firestore) GetNormalizedDocs(
 	err = f.firestoreClient.RunTransaction(
 		ctx,
 		func(ctx context.Context, t *firestore.Transaction) error {
-			h, err = f.ReadHostname(
-				ctx,
+			h, err = f.readHostname(
 				t,
 				siteId,
 				environment,
@@ -55,8 +54,7 @@ func (f *Firestore) GetNormalizedDocs(
 				return fmt.Errorf("unable to fetch hostname in transaction: %w: ", err)
 			}
 
-			m, err = f.ReadHostnameMetadata(
-				ctx,
+			m, err = f.readHostnameMetadata(
 				t,
 				siteId,
 				environment,
@@ -66,8 +64,7 @@ func (f *Firestore) GetNormalizedDocs(
 				return fmt.Errorf("unable to fetch hostname metadata in transaction: %w", err)
 			}
 
-			el, err = f.ReadEdgeLogic(
-				ctx,
+			el, err = f.readEdgeLogic(
 				t,
 				siteId,
 				environment,
@@ -84,6 +81,7 @@ func (f *Firestore) GetNormalizedDocs(
 	return
 }
 
+// WriteDenormalizedDocs writes the denormalized document to the provided paths
 func (f *Firestore) WriteDenormalizedDocs(
 	ctx context.Context,
 	paths []string,
@@ -94,23 +92,18 @@ func (f *Firestore) WriteDenormalizedDocs(
 		ctx,
 		func(ctx context.Context, t *firestore.Transaction) error {
 			for _, path := range paths {
-				if path[0] == '/' {
-					path = strings.TrimLeft(path, "/")
-				}
-				err := assertValidFirestoreDocPath(path)
+				collectionPath, docName, err := parseFirestorePath(path)
 				if err != nil {
 					return err
 				}
 
-				lastPathSeparatorIndex := strings.LastIndex(path, "/")
-				collectionPath := path[0:lastPathSeparatorIndex]
-				docName := path[lastPathSeparatorIndex+1:]
-				collection := f.getCollection(ctx, collectionPath, logger)
+				collection := f.firestoreClient.Collection(collectionPath)
 				docRef := collection.Doc(docName)
 				err = t.Set(docRef, denormalizedDoc)
 				if err != nil {
 					return fmt.Errorf("unable to write denormed policydoc to %s: %w", path, err)
 				}
+
 				logger.WithField("path", path).Info("Write Complete")
 			}
 
@@ -119,15 +112,13 @@ func (f *Firestore) WriteDenormalizedDocs(
 	)
 }
 
-func (f *Firestore) ReadHostname(
-	ctx context.Context,
+func (f *Firestore) readHostname(
 	t *firestore.Transaction,
 	siteId string,
 	env string,
 	hostname string,
 ) (*types.Hostname, error) {
-	logger := f.logger.WithField("method", "ReadHostname")
-	collection := f.getCollection(ctx, hostnameCollectionName, logger)
+	collection := f.firestoreClient.Collection(hostnameCollectionName)
 
 	hostnameDoc, err := f.getHostnameDocumentBySiteEnv(t, collection, siteId, env, hostname)
 	if err != nil {
@@ -139,16 +130,13 @@ func (f *Firestore) ReadHostname(
 	return h, nil
 }
 
-func (f *Firestore) ReadHostnameMetadata(
-	ctx context.Context,
+func (f *Firestore) readHostnameMetadata(
 	t *firestore.Transaction,
 	siteId string,
 	env string,
 	hostname string,
 ) (*types.HostnameMetadata, error) {
-	logger := f.logger.WithField("method", "ReadHostnameMetadata")
-
-	collection := f.getCollection(ctx, hostnameMetadataCollectionName, logger)
+	collection := f.firestoreClient.Collection(hostnameMetadataCollectionName)
 	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
 		t,
 		collection,
@@ -163,16 +151,13 @@ func (f *Firestore) ReadHostnameMetadata(
 	return h, nil
 }
 
-func (f *Firestore) ReadEdgeLogic(
-	ctx context.Context,
+func (f *Firestore) readEdgeLogic(
 	t *firestore.Transaction,
 	siteId string,
 	env string,
 	hostname string,
 ) (*types.EdgeLogic, error) {
-	logger := f.logger.WithField("method", "ReadEdgeLogic")
-
-	collection := f.getCollection(ctx, edgeLogicCollectionName, logger)
+	collection := f.firestoreClient.Collection(edgeLogicCollectionName)
 
 	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
 		t,
@@ -220,20 +205,24 @@ func (*Firestore) getHostnameDocumentBySiteEnv(
 	return hostnameDocument, nil
 }
 
-func (f *Firestore) getCollection(
-	ctx context.Context,
-	collectionName string,
-	logger *logrus.Entry,
-) *firestore.CollectionRef {
-	collection := f.firestoreClient.Collection(collectionName)
-	return collection
-}
-
-func assertValidFirestoreDocPath(path string) error {
-	splitPath := strings.Split(path, "/")
-	if len(splitPath)%2 != 0 {
-		return fmt.Errorf("path should have an even number of components: %s", path)
+// parseFirestorePath parsed the given path and returns the path portion, the
+// document name at the end of the path, and an error if the path is not valid
+func parseFirestorePath(path string) (collectionPath string, docName string, err error) {
+	if len(path) == 0 {
+		return "", "", fmt.Errorf("parseFirestorePath path must not be empty")
 	}
 
-	return nil
+	if path[0] == '/' {
+		path = strings.TrimLeft(path, "/")
+	}
+
+	splitPath := strings.Split(path, "/")
+	if len(splitPath)%2 != 0 {
+		return "", "", fmt.Errorf("path should have an even number of components: %s", path)
+	}
+
+	lastPathSeparatorIndex := strings.LastIndex(path, "/")
+	collectionPath = path[0:lastPathSeparatorIndex]
+	docName = path[lastPathSeparatorIndex+1:]
+	return
 }
