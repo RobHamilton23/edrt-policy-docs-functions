@@ -54,7 +54,7 @@ func (d *DocumentTransformation) Denormalize(
 
 	// Write denormalizes documents to firestore
 	paths := []string{
-		fmt.Sprintf("denormed/policydoc/%s", denormed.Hostname),
+		fmt.Sprintf("denormed/policydoc/%s/policydoc", denormed.Hostname),
 	}
 	err = d.firestore.WriteDenormalizedDocs(ctx, paths, denormed)
 	if err != nil {
