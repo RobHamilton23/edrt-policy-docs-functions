@@ -23,7 +23,7 @@ func init() {
 	logger = logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 
-	fs, err := firestore.New(
+	fs, err := firestore.NewFirestoreClient(
 		context.Background(),
 		logger,
 		viper.GetString("firestore-project"),

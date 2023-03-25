@@ -57,7 +57,7 @@ func main() {
 }
 
 func getFirestore(firestoreProject string) *firestore.Firestore {
-	f, err := firestore.New(context.Background(), logger, firestoreProject)
+	f, err := firestore.NewFirestoreClient(context.Background(), logger, firestoreProject)
 	if err != nil {
 		logger.Fatalf("Unable to create firestore instance: %w", err)
 	}

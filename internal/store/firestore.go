@@ -7,8 +7,6 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"pantheon.io/edrt-policy-docs-functions/internal/types"
 )
 
@@ -22,7 +20,9 @@ type Firestore struct {
 	firestoreClient *firestore.Client
 }
 
-func New(ctx context.Context, logger *logrus.Logger, projectId string) (*Firestore, error) {
+// NewFirestoreClient initializes a Firestore instance used for operations on
+// policy docs in firestore
+func NewFirestoreClient(ctx context.Context, logger *logrus.Logger, projectId string) (*Firestore, error) {
 	client, err := firestore.NewClient(ctx, projectId)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create firestore client: %w", err)
@@ -35,6 +35,8 @@ func New(ctx context.Context, logger *logrus.Logger, projectId string) (*Firesto
 	}, nil
 }
 
+// GetNormalizedDocs reads the normalized Hostname, Hostname Metadata, and
+// Edge Logic documents from firestore
 func (f *Firestore) GetNormalizedDocs(
 	ctx context.Context,
 	siteId string,
@@ -118,15 +120,21 @@ func (f *Firestore) readHostname(
 	env string,
 	hostname string,
 ) (*types.Hostname, error) {
-	collection := f.firestoreClient.Collection(hostnameCollectionName)
+	pathComponents := []string{hostnameCollectionName, siteId, env}
+	hostnameDocumentRef := f.firestoreClient.Collection(
+		strings.Join(pathComponents, "/"),
+	).Doc(hostname)
 
-	hostnameDoc, err := f.getHostnameDocumentBySiteEnv(t, collection, siteId, env, hostname)
+	hostnameDocument, err := t.Get(hostnameDocumentRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch hostname document for %s: %s", hostname, err)
 	}
 
 	var h *types.Hostname
-	hostnameDoc.DataTo(&h)
+	err = hostnameDocument.DataTo(&h)
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize hostname document: %w", err)
+	}
 	return h, nil
 }
 
@@ -136,18 +144,21 @@ func (f *Firestore) readHostnameMetadata(
 	env string,
 	hostname string,
 ) (*types.HostnameMetadata, error) {
-	collection := f.firestoreClient.Collection(hostnameMetadataCollectionName)
-	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
-		t,
-		collection,
-		siteId,
-		env,
-		hostname)
+	pathComponents := []string{hostnameMetadataCollectionName, siteId, env}
+	hostnameMetadataDocumentRef := f.firestoreClient.Collection(
+		strings.Join(pathComponents, "/"),
+	).Doc(hostname)
+
+	hostnameMetadataDocument, err := t.Get(hostnameMetadataDocumentRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get hostname document for %s: %s", hostname, err)
 	}
 	var h *types.HostnameMetadata
-	hostnameDocument.DataTo(&h)
+	err = hostnameMetadataDocument.DataTo(&h)
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize hostname metadata document: %w", err)
+	}
+
 	return h, nil
 }
 
@@ -157,59 +168,31 @@ func (f *Firestore) readEdgeLogic(
 	env string,
 	hostname string,
 ) (*types.EdgeLogic, error) {
-	collection := f.firestoreClient.Collection(edgeLogicCollectionName)
+	pathComponents := []string{edgeLogicCollectionName, siteId, env}
+	edgeLogicDocumentRef := f.firestoreClient.Collection(
+		strings.Join(pathComponents, "/"),
+	).Doc(hostname)
 
-	hostnameDocument, err := f.getHostnameDocumentBySiteEnv(
-		t,
-		collection,
-		siteId,
-		env,
-		hostname,
-	)
+	edgeLogicDocument, err := t.Get(edgeLogicDocumentRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get hostname focument for %s: %s", hostname, err)
 	}
 
 	var h *types.EdgeLogic
-	hostnameDocument.DataTo(&h)
+	err = edgeLogicDocument.DataTo(&h)
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize edgelogic document: %w", err)
+	}
+
 	return h, nil
-}
-
-func (*Firestore) getHostnameDocumentBySiteEnv(
-	t *firestore.Transaction,
-	rootCollection *firestore.CollectionRef,
-	siteId string,
-	env string,
-	hostname string) (*firestore.DocumentSnapshot, error) {
-	siteDocRef := rootCollection.Doc(siteId)
-	siteDoc, err := t.Get(siteDocRef)
-
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, fmt.Errorf("document not found for site %s %w", siteId, err)
-		}
-
-		return nil, fmt.Errorf("unable to load site document for %s: %w", siteId, err)
-	}
-
-	envCollection := siteDoc.Ref.Collection(env)
-	hostnameDoc := envCollection.Doc(hostname)
-	hostnameDocument, err := t.Get(hostnameDoc)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, fmt.Errorf("document not found for hostname %s", hostname)
-		}
-
-		return nil, fmt.Errorf("unable to load hostname document for %s: %w", hostname, err)
-	}
-	return hostnameDocument, nil
 }
 
 // parseFirestorePath parsed the given path and returns the path portion, the
 // document name at the end of the path, and an error if the path is not valid
 func parseFirestorePath(path string) (collectionPath string, docName string, err error) {
 	if len(path) == 0 {
-		return "", "", fmt.Errorf("parseFirestorePath path must not be empty")
+		err = fmt.Errorf("parseFirestorePath path must not be empty")
+		return
 	}
 
 	if path[0] == '/' {
@@ -218,7 +201,8 @@ func parseFirestorePath(path string) (collectionPath string, docName string, err
 
 	splitPath := strings.Split(path, "/")
 	if len(splitPath)%2 != 0 {
-		return "", "", fmt.Errorf("path should have an even number of components: %s", path)
+		err = fmt.Errorf("path should have an even number of components: %s", path)
+		return
 	}
 
 	lastPathSeparatorIndex := strings.LastIndex(path, "/")
